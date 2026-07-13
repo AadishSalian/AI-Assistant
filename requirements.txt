@@ -2,3 +2,5 @@ pyyaml==6.0.1
 openwakeword==0.6.0
 pyaudio==0.2.14
 numpy==1.26.4
+faster-whisper
+SpeechRecognition==3.10.3

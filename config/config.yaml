@@ -12,3 +12,9 @@ tts:
   model_path: "assets/en_US-lessac-low.onnx"
   config_path: "assets/en_US-lessac-low.onnx.json"
   speed: 1.0
+
+stt:
+  model_size: "small" # Using 'small' for CPU speed, per requirements
+  compute_type: "int8"
+  listen_timeout: 6 # Stop listening if no speech is heard for 6 seconds
+  phrase_limit: 15 # Max duration for a single command in seconds

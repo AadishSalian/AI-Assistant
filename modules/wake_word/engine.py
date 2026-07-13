@@ -28,26 +28,30 @@ class WakeWordEngine:
         self.CHUNK = 1280
         
         self.audio = pyaudio.PyAudio()
-        self.mic_stream = self.audio.open(format=self.FORMAT, 
-                                          channels=self.CHANNELS,
-                                          rate=self.RATE, 
-                                          input=True, 
-                                          frames_per_buffer=self.CHUNK)
         logger.info("Wake word engine initialized successfully.")
 
     def listen_for_wake_word(self):
-        logger.info("Listening...")
-        while True:
-            # Read audio data from mic
-            audio_data = np.frombuffer(self.mic_stream.read(self.CHUNK, exception_on_overflow=False), dtype=np.int16)
-            
-            # Get prediction
-            prediction = self.oww_model.predict(audio_data)
-            
-            # Check scores
-            for mdl, score in prediction.items():
-                if score >= self.threshold:
-                    logger.info(f"Wake word detected! (Score: {score:.2f})")
-                    # Clear internal buffer to prevent repeated immediate triggering
-                    self.oww_model.reset()
-                    return True
+        logger.info("Listening for wake word...")
+        mic_stream = self.audio.open(format=self.FORMAT, 
+                                     channels=self.CHANNELS,
+                                     rate=self.RATE, 
+                                     input=True, 
+                                     frames_per_buffer=self.CHUNK)
+        try:
+            while True:
+                # Read audio data from mic
+                audio_data = np.frombuffer(mic_stream.read(self.CHUNK, exception_on_overflow=False), dtype=np.int16)
+                
+                # Get prediction
+                prediction = self.oww_model.predict(audio_data)
+                
+                # Check scores
+                for mdl, score in prediction.items():
+                    if score >= self.threshold:
+                        logger.info(f"Wake word detected! (Score: {score:.2f})")
+                        # Clear internal buffer to prevent repeated immediate triggering
+                        self.oww_model.reset()
+                        return True
+        finally:
+            mic_stream.stop_stream()
+            mic_stream.close()
