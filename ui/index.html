@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sweetie Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400..900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="view-dock">
+    <!-- Drag region for pywebview -->
+    <div class="pywebview-drag-region drag-handle"></div>
+
+    <div id="dock-container" class="panel">
+        <div class="dock-header">
+            <div class="dial-container">
+                <svg class="dial" viewBox="0 0 36 36">
+                    <path class="dial-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path id="main-dial-sweep" class="dial-sweep idle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <div class="dial-center"></div>
+            </div>
+            <div class="dock-info">
+                <h1 class="greeting">Sweetie</h1>
+                <div id="status-text" class="status text-mid">Say 'hey sweetie' to begin</div>
+            </div>
+            <button id="toggle-btn" class="icon-btn">⛶</button>
+        </div>
+        <div id="transcript-container" class="transcript text-high"></div>
+    </div>
+
+    <div id="dashboard-container" class="panel hidden">
+        <div class="dash-header">
+            <h2 class="text-high">System Core</h2>
+            <button id="close-btn" class="icon-btn">✖</button>
+        </div>
+        <div class="divider"></div>
+        
+        <div class="stats-row">
+            <div class="stat-card panel-2">
+                <div class="dial-container small">
+                    <svg class="dial" viewBox="0 0 36 36">
+                        <path class="dial-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path id="cpu-sweep" class="dial-sweep" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div id="cpu-val" class="dial-center text-mono">0%</div>
+                </div>
+                <div class="stat-label text-dim">CPU</div>
+            </div>
+            <div class="stat-card panel-2">
+                <div class="dial-container small">
+                    <svg class="dial" viewBox="0 0 36 36">
+                        <path class="dial-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path id="mem-sweep" class="dial-sweep" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div id="mem-val" class="dial-center text-mono">0%</div>
+                </div>
+                <div class="stat-label text-dim">MEM</div>
+            </div>
+            <div class="stat-card panel-2">
+                <div class="dial-container small">
+                    <svg class="dial" viewBox="0 0 36 36">
+                        <path class="dial-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path id="disk-sweep" class="dial-sweep" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div id="disk-val" class="dial-center text-mono">0%</div>
+                </div>
+                <div class="stat-label text-dim">DISK</div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="quick-actions">
+            <button class="action-btn" onclick="triggerAction('screenshot')">📸</button>
+            <button class="action-btn" onclick="triggerAction('volume')">🔊</button>
+            <button class="action-btn" onclick="triggerAction('lock')">🔒</button>
+            <button class="action-btn" onclick="triggerAction('settings')">⚙️</button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="log-container panel-2">
+            <h3 class="text-dim">Activity Log</h3>
+            <ul id="activity-log" class="text-mid text-mono">
+                <!-- Logs populated here -->
+            </ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

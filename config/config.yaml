@@ -24,3 +24,9 @@ stt:
   compute_type: "int8"
   listen_timeout: 6 # Stop listening if no speech is heard for 6 seconds
   phrase_limit: 15 # Max duration for a single command in seconds
+
+gui:
+  dock_width: 320
+  dock_height: 140
+  dash_width: 400
+  dash_height: 600
