@@ -1,0 +1,26 @@
+# Environments
+venv/
+env/
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+logs/
+*.log
+
+# Large Binary Assets & Models
+assets/
+models/
+*.onnx
+*.zip
+*.bin
+*.pt
+
+# IDEs
+.vscode/
+.idea/
