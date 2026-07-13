@@ -13,12 +13,23 @@ if __name__ == "__main__":
     # Ensure assets directory exists
     os.makedirs("assets", exist_ok=True)
     
-    # Piper TTS model (en_US-lessac-low)
-    base_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/"
-    model_file = "en_US-lessac-low.onnx"
-    config_file = "en_US-lessac-low.onnx.json"
+    voices = [
+        {
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/",
+            "name": "en_US-lessac-low"
+        },
+        {
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/low/",
+            "name": "en_US-ryan-low"
+        }
+    ]
     
-    print("Setting up local assets...")
-    download_file(base_url + model_file, f"assets/{model_file}")
-    download_file(base_url + config_file, f"assets/{config_file}")
-    print("\nSetup complete. You are ready to run main.py!")
+    print("Setting up local TTS voice models...")
+    for voice in voices:
+        model_file = f"{voice['name']}.onnx"
+        config_file = f"{voice['name']}.onnx.json"
+        
+        download_file(voice['url'] + model_file, f"assets/{model_file}")
+        download_file(voice['url'] + config_file, f"assets/{config_file}")
+        
+    print("\nVoice setup complete.")

@@ -13,9 +13,11 @@ def main():
     logger.info("Initializing Sweetie Assistant...")
     
     # Initialize TTS First
+    tts_config = config.get('tts', {})
     tts_engine = TTSEngine(
-        model_path=config['tts']['model_path'],
-        config_path=config['tts']['config_path']
+        voice_name=tts_config.get('voice', 'en_US-lessac-low'),
+        speed=tts_config.get('speed', 1.0),
+        sentence_silence=tts_config.get('sentence_silence', 0.2)
     )
     
     # Initialize STT Engine
@@ -49,6 +51,9 @@ def main():
                 
                 if text:
                     logger.info(f"Captured Text: {text}")
+                    # Phase 3: Acknowledge the command
+                    tts_engine.speak("On it, boss.")
+                    
                     # Phase 4 will handle intent parsing here
                 else:
                     logger.info("No speech detected or transcription failed.")

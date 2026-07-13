@@ -6,24 +6,27 @@ import pyaudio
 logger = logging.getLogger("sweetie.tts")
 
 class TTSEngine:
-    def __init__(self, model_path, config_path):
-        self.model_path = model_path
-        self.config_path = config_path
+    def __init__(self, voice_name="en_US-lessac-low", speed=1.0, sentence_silence=0.2):
+        self.model_path = os.path.join("assets", f"{voice_name}.onnx")
+        self.config_path = os.path.join("assets", f"{voice_name}.onnx.json")
+        self.speed = speed
+        self.sentence_silence = sentence_silence
+        
         # Use the local Windows executable
         self.piper_exe = os.path.join("assets", "piper", "piper.exe")
         
         if not os.path.exists(self.piper_exe):
             logger.error(f"Piper executable not found at {self.piper_exe}.")
             self.ready = False
-        elif not os.path.exists(model_path):
-            logger.error(f"TTS Model not found at {model_path}.")
+        elif not os.path.exists(self.model_path):
+            logger.error(f"TTS Model not found at {self.model_path}. Run scripts/download_models.py")
             self.ready = False
         else:
-            logger.info(f"TTS engine initialized using piper.exe with model '{model_path}'.")
+            logger.info(f"TTS engine initialized with voice '{voice_name}' (Speed: {speed})")
             self.ready = True
 
     def speak(self, text):
-        logger.info(f"Speaking response: '{text}'")
+        logger.info(f"Speaking: '{text}'")
         if not self.ready:
             logger.error("TTS engine not ready. Cannot speak.")
             return
@@ -32,6 +35,8 @@ class TTSEngine:
             self.piper_exe,
             "--model", self.model_path,
             "--config", self.config_path,
+            "--length_scale", str(self.speed),
+            "--sentence_silence", str(self.sentence_silence),
             "--output_raw"
         ]
         
@@ -47,7 +52,9 @@ class TTSEngine:
             # Play the audio stream
             p = pyaudio.PyAudio()
             # Piper typically outputs 16kHz or 22050Hz based on the model.
-            # en_US-lessac-low is a 16kHz model.
+            # Most low/medium models on huggingface are 16kHz or 22050Hz.
+            # Note: A mismatch here causes chipmunk/slow audio. 
+            # We are using 16kHz models here (lessac-low, ryan-low).
             stream = p.open(format=pyaudio.paInt16,
                             channels=1,
                             rate=16000,

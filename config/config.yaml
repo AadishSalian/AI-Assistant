@@ -9,9 +9,15 @@ wake_word:
   threshold: 0.5
 
 tts:
-  model_path: "assets/en_US-lessac-low.onnx"
-  config_path: "assets/en_US-lessac-low.onnx.json"
+  # Choose which voice to use. (Make sure you've run scripts/download_models.py)
+  # Options: "en_US-lessac-low" (Female), "en_US-ryan-low" (Male)
+  voice: "en_US-lessac-low"
+  
+  # Speed modifier (Piper's length_scale). < 1.0 is faster, > 1.0 is slower.
   speed: 1.0
+  
+  # Adds a pause (in seconds) between sentences for natural cadence
+  sentence_silence: 0.2
 
 stt:
   model_size: "small" # Using 'small' for CPU speed, per requirements
