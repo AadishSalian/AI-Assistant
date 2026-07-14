@@ -18,11 +18,13 @@ class IntentRouter:
         3. system.lock
         4. system.screenshot
         5. app.open (params: app_name)
-        6. app.close (params: app_name)
+        6. app.close (params: app_name, batch=True|False, except_app=app_name)
         7. app.focus (params: app_name)
-        8. web.search (params: query)
-        9. conversational.chat
-        10. unknown (use if you cannot confidently determine the intent)
+        8. app.stats (params: app_name)
+        9. system.startup (params: action="list"|"enable"|"disable", app_name=string)
+        10. web.search (params: query)
+        11. conversational.chat
+        12. unknown (use if you cannot confidently determine the intent)
         """
         
         self.system_prompt = f"""
@@ -45,6 +47,12 @@ class IntentRouter:
     def fast_path(self, text):
         t = text.lower().strip()
         
+        # Confirm / Cancel
+        if t in ["yes", "yep", "do it", "confirm", "sure"]:
+            return {"intent": "system.confirm", "parameters": {}, "confidence": 1.0, "conversational_reply": "Done."}
+        if t in ["no", "nope", "cancel", "stop"]:
+            return {"intent": "system.cancel", "parameters": {}, "confidence": 1.0, "conversational_reply": "Cancelled."}
+            
         # Mute
         if re.search(r'\b(mute|unmute)\b', t):
             state = "on" if "mute" in t and "unmute" not in t else "off"
@@ -64,10 +72,21 @@ class IntentRouter:
         if re.search(r'\b(take a screenshot|screenshot)\b', t):
             return {"intent": "system.screenshot", "parameters": {}, "confidence": 1.0, "conversational_reply": "Snap!"}
             
-        # Open App (basic catch)
-        match = re.search(r'^open (notepad|calculator|browser|spotify)$', t)
+        # Open App (catch all)
+        match = re.search(r'^open (.*?)[.!?]*$', t)
         if match:
             return {"intent": "app.open", "parameters": {"app_name": match.group(1)}, "confidence": 0.9, "conversational_reply": f"Opening {match.group(1)}."}
+            
+        # Close App (catch all)
+        match = re.search(r'^close (.*?)[.!?]*$', t)
+        if match:
+            batch = "all" in match.group(1) or "everything" in match.group(1)
+            return {"intent": "app.close", "parameters": {"app_name": match.group(1), "batch": batch}, "confidence": 0.9, "conversational_reply": f"Closing {match.group(1)}."}
+            
+        # App Stats
+        match = re.search(r'how much (ram|memory).*? (.*?)[.!?]*$', t)
+        if match:
+            return {"intent": "app.stats", "parameters": {"app_name": match.group(2)}, "confidence": 0.9, "conversational_reply": "Let me check."}
             
         return None
 
@@ -83,7 +102,7 @@ class IntentRouter:
         }
         
         try:
-            response = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=15)
+            response = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=45)
             if response.status_code == 200:
                 result = response.json().get("response", "{}")
                 try:

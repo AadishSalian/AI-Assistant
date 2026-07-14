@@ -2,6 +2,7 @@ import os
 import threading
 import webview
 import time
+import logging
 from core.config_loader import load_config
 from core.logger import setup_logger
 from modules.wake_word.engine import WakeWordEngine
@@ -10,6 +11,7 @@ from modules.stt.whisper_engine import STTEngine
 from core.gui_bridge import Api, start_stats_loop
 from modules.intent.router import IntentRouter
 from core.memory import MemoryBuffer
+from modules.system.app_manager import AppManager
 
 def assistant_loop(config, logger, api):
     logger.info("Initializing Sweetie Assistant Models...")
@@ -39,11 +41,12 @@ def assistant_loop(config, logger, api):
     )
     
     memory = MemoryBuffer()
+    app_manager = AppManager(config)
     
     user_name = config['assistant']['user_name']
+    require_confirm = config.get('safety', {}).get('require_confirm', True)
+    pending_action = None
     
-    # Wait briefly for GUI to render
-    time.sleep(1.5)
     api.push_log("System initialized and ready.")
     
     try:
@@ -53,9 +56,13 @@ def assistant_loop(config, logger, api):
                 api.push_state('listening')
                 api.push_log("Wake word detected")
                 
-                response_text = f"Hey {user_name}, welcome back boss"
-                api.push_transcript(response_text)
-                tts_engine.speak(response_text)
+                # Only greet if we don't have a pending action
+                if not pending_action:
+                    response_text = f"Hey {user_name}, welcome back boss"
+                    api.push_transcript(response_text)
+                    tts_engine.speak(response_text)
+                else:
+                    api.push_transcript("Listening for confirmation...")
                 
                 text = stt_engine.listen_and_transcribe(
                     timeout=stt_config.get('listen_timeout', 6),
@@ -78,26 +85,76 @@ def assistant_loop(config, logger, api):
                     reply = result.get('conversational_reply', "Got it.")
                     params = result.get('parameters', {})
                     
+                    # Handle Confirmation State
+                    if pending_action:
+                        if intent_name == 'system.confirm':
+                            api.push_log("Executing confirmed action.")
+                            tts_engine.speak("Executing, boss.")
+                            pending_action()
+                        else:
+                            api.push_log("Action cancelled.")
+                            tts_engine.speak("Action cancelled.")
+                        pending_action = None
+                        continue
+                    
                     # Handle low confidence
                     if confidence < 0.60 or intent_name == 'unknown':
                         reply = "I'm not exactly sure what you mean, boss. Can you clarify?"
                         intent_name = "clarification_needed"
                         
                     logger.info(f"Resolved Intent: {intent_name} (Conf: {confidence}) | Params: {params}")
-                    api.push_log(f"Intent: {intent_name} (Conf: {confidence})")
+                    api.push_log(f"Intent: {intent_name}")
                     
                     # Save to memory
                     memory.add_exchange(text, reply, intent_name, params)
                     
-                    # Speak the LLM's conversational reply
+                    # Phase 5 Execution
+                    needs_confirm = False
+                    
+                    if intent_name == 'app.open':
+                        success, msg = app_manager.launch_app(params.get('app_name', ''))
+                        reply = msg if not success else reply
+                    elif intent_name == 'app.focus':
+                        success, msg = app_manager.switch_app(params.get('app_name', ''))
+                        reply = msg if not success else reply
+                    elif intent_name == 'app.stats':
+                        success, msg = app_manager.app_stats(params.get('app_name', ''))
+                        reply = msg
+                    elif intent_name == 'app.close':
+                        batch = params.get('batch', False)
+                        if batch and require_confirm:
+                            needs_confirm = True
+                            reply = "Are you sure you want to run a batch close operation?"
+                            def execute_close():
+                                app_manager.close_app(params.get('app_name', ''), batch, params.get('except_app'))
+                            pending_action = execute_close
+                        else:
+                            success, msg = app_manager.close_app(params.get('app_name', ''), batch, params.get('except_app'))
+                            reply = msg if not success else reply
+                    elif intent_name == 'system.startup':
+                        if require_confirm:
+                            needs_confirm = True
+                            reply = f"Are you sure you want to modify the registry for {params.get('app_name', '')}?"
+                            def execute_startup():
+                                success, msg = app_manager.manage_startup(params.get('action'), params.get('app_name'))
+                                tts_engine.speak(msg)
+                            pending_action = execute_startup
+                        else:
+                            success, msg = app_manager.manage_startup(params.get('action'), params.get('app_name'))
+                            reply = msg
+                    
+                    # Speak the reply
                     api.push_transcript(reply)
                     tts_engine.speak(reply)
-                    api.push_log("Action acknowledged.")
-                    
-                    # Phase 5 will handle actually executing the parameters here
+                    if needs_confirm:
+                        api.push_log("Awaiting user confirmation...")
+                        
                 else:
                     api.push_transcript("")
                     logger.info("No speech detected.")
+                    if pending_action:
+                        pending_action = None
+                        logger.info("Pending action timed out.")
                     
     except Exception as e:
         logger.error(f"Critical error in assistant loop: {e}")
@@ -105,6 +162,9 @@ def assistant_loop(config, logger, api):
 def main():
     config = load_config("config/config.yaml")
     logger = setup_logger(config['assistant']['log_level'])
+    
+    # Silence harmless but scary pywebview/pythonnet COM initialization noise
+    logging.getLogger('pywebview').setLevel(logging.CRITICAL)
     
     api = Api()
     

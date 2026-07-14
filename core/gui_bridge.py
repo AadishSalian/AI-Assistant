@@ -28,19 +28,28 @@ class Api:
     
     def push_state(self, state_name, message=""):
         if self.window:
-            self.window.evaluate_js(f"setState('{state_name}', '{message}')")
+            try:
+                self.window.evaluate_js(f"setState('{state_name}', '{message}')")
+            except Exception: pass
             
     def push_transcript(self, text):
         if self.window:
             safe_text = text.replace('\\', '\\\\').replace("'", "\\'")
-            self.window.evaluate_js(f"updateTranscript('{safe_text}')")
+            try:
+                self.window.evaluate_js(f"updateTranscript('{safe_text}')")
+            except Exception: pass
             
     def push_log(self, text):
         if self.window:
             safe_text = text.replace('\\', '\\\\').replace("'", "\\'")
-            self.window.evaluate_js(f"addLogEntry('{safe_text}')")
+            try:
+                self.window.evaluate_js(f"addLogEntry('{safe_text}')")
+            except Exception: pass
 
 def start_stats_loop(api):
+    # Wait briefly before pushing stats so window is likely ready
+    time.sleep(3)
+    
     while True:
         try:
             cpu = psutil.cpu_percent(interval=1)
@@ -49,6 +58,6 @@ def start_stats_loop(api):
             
             if api.window:
                 api.window.evaluate_js(f"updateStats({cpu}, {mem}, {disk})")
-        except Exception as e:
-            logger.error(f"Stats error: {e}")
-            time.sleep(2)
+        except Exception:
+            pass
+        time.sleep(2)
