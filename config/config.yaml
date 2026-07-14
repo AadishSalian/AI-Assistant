@@ -30,3 +30,7 @@ gui:
   dock_height: 140
   dash_width: 400
   dash_height: 600
+
+ollama:
+  host: "http://localhost:11434"
+  model: "llama3.2:3b" # Default to 3B model for fast CPU inference

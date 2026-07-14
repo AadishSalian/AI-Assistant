@@ -8,6 +8,8 @@ from modules.wake_word.engine import WakeWordEngine
 from modules.tts.piper_engine import TTSEngine
 from modules.stt.whisper_engine import STTEngine
 from core.gui_bridge import Api, start_stats_loop
+from modules.intent.router import IntentRouter
+from core.memory import MemoryBuffer
 
 def assistant_loop(config, logger, api):
     logger.info("Initializing Sweetie Assistant Models...")
@@ -29,6 +31,14 @@ def assistant_loop(config, logger, api):
         model_path_or_name=config['wake_word']['phrase'], 
         threshold=config['wake_word']['threshold']
     )
+    
+    ollama_config = config.get('ollama', {})
+    intent_router = IntentRouter(
+        ollama_host=ollama_config.get('host', 'http://localhost:11434'),
+        model=ollama_config.get('model', 'llama3.2:3b')
+    )
+    
+    memory = MemoryBuffer()
     
     user_name = config['assistant']['user_name']
     
@@ -58,8 +68,33 @@ def assistant_loop(config, logger, api):
                     api.push_log(f"User: {text}")
                     
                     api.push_state('thinking')
-                    tts_engine.speak("On it, boss.")
+                    
+                    # Phase 4: Route Intent
+                    context = memory.get_context_string()
+                    result = intent_router.route(text, context)
+                    
+                    intent_name = result.get('intent', 'unknown')
+                    confidence = result.get('confidence', 0.0)
+                    reply = result.get('conversational_reply', "Got it.")
+                    params = result.get('parameters', {})
+                    
+                    # Handle low confidence
+                    if confidence < 0.60 or intent_name == 'unknown':
+                        reply = "I'm not exactly sure what you mean, boss. Can you clarify?"
+                        intent_name = "clarification_needed"
+                        
+                    logger.info(f"Resolved Intent: {intent_name} (Conf: {confidence}) | Params: {params}")
+                    api.push_log(f"Intent: {intent_name} (Conf: {confidence})")
+                    
+                    # Save to memory
+                    memory.add_exchange(text, reply, intent_name, params)
+                    
+                    # Speak the LLM's conversational reply
+                    api.push_transcript(reply)
+                    tts_engine.speak(reply)
                     api.push_log("Action acknowledged.")
+                    
+                    # Phase 5 will handle actually executing the parameters here
                 else:
                     api.push_transcript("")
                     logger.info("No speech detected.")
