@@ -24,7 +24,12 @@ class IntentRouter:
         9. system.startup (params: action="list"|"enable"|"disable", app_name=string)
         10. web.search (params: query)
         11. conversational.chat
-        12. unknown (use if you cannot confidently determine the intent)
+        12. window.position (params: layout="left"|"right"|"center"|"maximize"|"minimize")
+        13. window.monitor (params: monitor_index=int)
+        14. desktop.switch (params: target=int|"next"|"previous")
+        15. desktop.create
+        16. clarification_needed
+        17. unknown (use if you cannot confidently determine the intent)
         """
         
         self.system_prompt = f"""
@@ -87,6 +92,50 @@ class IntentRouter:
         match = re.search(r'how much (ram|memory).*? (.*?)[.!?]*$', t)
         if match:
             return {"intent": "app.stats", "parameters": {"app_name": match.group(2)}, "confidence": 0.9, "conversational_reply": "Let me check."}
+            
+        # Window Management (Phase 6)
+        match = re.search(r'(snap|move|put) (.*?) to the (left|right|top|bottom|center)', t)
+        if match:
+            target = match.group(2)
+            for word in ['window', 'the', 'this', 'that', 'it', 'app', 'application']:
+                target = target.replace(word, '')
+            target = target.strip()
+            if not target: target = 'current'
+            return {"intent": "window.position", "parameters": {"layout": match.group(3), "target_window": target}, "confidence": 0.9}
+            
+        if "maximize" in t:
+            match = re.search(r'maximize\s*(.*)', t)
+            target = match.group(1) if match else ''
+            for word in ['window', 'the', 'this', 'that', 'it', 'app', 'application']:
+                target = target.replace(word, '')
+            target = target.strip()
+            if not target: target = 'current'
+            return {"intent": "window.position", "parameters": {"layout": "maximize", "target_window": target}, "confidence": 0.9, "conversational_reply": "Maximizing."}
+
+        if "minimize" in t:
+            match = re.search(r'minimize\s*(.*)', t)
+            target = match.group(1) if match else ''
+            for word in ['window', 'the', 'this', 'that', 'it', 'app', 'application']:
+                target = target.replace(word, '')
+            target = target.strip()
+            if not target: target = 'current'
+            return {"intent": "window.position", "parameters": {"layout": "minimize", "target_window": target}, "confidence": 0.9, "conversational_reply": "Minimizing."}
+
+        match = re.search(r'move (.*) to (monitor|screen) (\d+)', t)
+        if match:
+            target = match.group(1)
+            for word in ['window', 'the', 'this', 'that', 'it', 'app', 'application']:
+                target = target.replace(word, '')
+            target = target.strip()
+            if not target: target = 'current'
+            return {"intent": "window.monitor", "parameters": {"monitor_index": int(match.group(3)), "target_window": target}, "confidence": 0.9}
+            
+        match = re.search(r'switch to desktop (\d+)', t)
+        if match:
+            return {"intent": "desktop.switch", "parameters": {"target": int(match.group(1))}, "confidence": 0.9}
+            
+        if "create a new desktop" in t or "new virtual desktop" in t:
+            return {"intent": "desktop.create", "parameters": {}, "confidence": 0.9}
             
         return None
 

@@ -12,6 +12,7 @@ from core.gui_bridge import Api, start_stats_loop
 from modules.intent.router import IntentRouter
 from core.memory import MemoryBuffer
 from modules.system.app_manager import AppManager
+from modules.system.window_manager import WindowManager
 
 def assistant_loop(config, logger, api):
     logger.info("Initializing Sweetie Assistant Models...")
@@ -42,6 +43,7 @@ def assistant_loop(config, logger, api):
     
     memory = MemoryBuffer()
     app_manager = AppManager(config)
+    window_manager = WindowManager(config)
     
     user_name = config['assistant']['user_name']
     require_confirm = config.get('safety', {}).get('require_confirm', True)
@@ -114,6 +116,15 @@ def assistant_loop(config, logger, api):
                     if intent_name == 'app.open':
                         success, msg = app_manager.launch_app(params.get('app_name', ''))
                         reply = msg if not success else reply
+                        if success:
+                            app_name = params.get('app_name', '').lower()
+                            suggestion = window_manager.get_suggested_layout(app_name)
+                            if suggestion:
+                                needs_confirm = True
+                                reply += f" Should I snap it to the {suggestion} for you?"
+                                def execute_snap(s=suggestion):
+                                    window_manager.position_window(s)
+                                pending_action = execute_snap
                     elif intent_name == 'app.focus':
                         success, msg = app_manager.switch_app(params.get('app_name', ''))
                         reply = msg if not success else reply
@@ -142,6 +153,27 @@ def assistant_loop(config, logger, api):
                         else:
                             success, msg = app_manager.manage_startup(params.get('action'), params.get('app_name'))
                             reply = msg
+                    elif intent_name == 'window.position':
+                        layout = params.get('layout', '')
+                        target = params.get('target_window', 'current')
+                        if target.lower() not in ['this', 'the', 'current', '']:
+                            app_manager.switch_app(target)
+                            time.sleep(0.5) # Give OS time to bring window to foreground
+                        success, msg = window_manager.position_window(layout)
+                        reply = msg
+                    elif intent_name == 'window.monitor':
+                        target = params.get('target_window', 'current')
+                        if target.lower() not in ['this', 'the', 'current', '']:
+                            app_manager.switch_app(target)
+                            time.sleep(0.5)
+                        success, msg = window_manager.move_to_monitor(params.get('monitor_index', 1))
+                        reply = msg
+                    elif intent_name == 'desktop.switch':
+                        success, msg = window_manager.switch_desktop(params.get('target', 'next'))
+                        reply = msg
+                    elif intent_name == 'desktop.create':
+                        success, msg = window_manager.create_desktop()
+                        reply = msg
                     
                     # Speak the reply
                     api.push_transcript(reply)
