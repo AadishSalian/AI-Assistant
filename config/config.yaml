@@ -44,3 +44,7 @@ apps:
 
 safety:
   require_confirm: true # Ask before batch operations or modifying registry
+
+screenshot:
+  save_directory: "screenshots" # Will be resolved relative to sweetie dir if not absolute
+  format: "png" # Options: png, jpeg, bmp

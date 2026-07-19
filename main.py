@@ -13,6 +13,7 @@ from modules.intent.router import IntentRouter
 from core.memory import MemoryBuffer
 from modules.system.app_manager import AppManager
 from modules.system.window_manager import WindowManager
+from modules.system.screenshot_manager import ScreenshotManager
 
 def assistant_loop(config, logger, api):
     logger.info("Initializing Sweetie Assistant Models...")
@@ -44,10 +45,15 @@ def assistant_loop(config, logger, api):
     memory = MemoryBuffer()
     app_manager = AppManager(config)
     window_manager = WindowManager(config)
+    screenshot_manager = ScreenshotManager(config)
     
     user_name = config['assistant']['user_name']
     require_confirm = config.get('safety', {}).get('require_confirm', True)
     pending_action = None
+    
+    # Wait for the UI to fully render before pushing JavaScript events
+    import time
+    time.sleep(3)
     
     api.push_log("System initialized and ready.")
     
@@ -173,6 +179,23 @@ def assistant_loop(config, logger, api):
                         reply = msg
                     elif intent_name == 'desktop.create':
                         success, msg = window_manager.create_desktop()
+                        reply = msg
+                    elif intent_name == 'screenshot.capture':
+                        mode = params.get('mode', 'fullscreen')
+                        target = params.get('target_window', 'current')
+                        
+                        if mode == 'window':
+                            if target.lower() not in ['this', 'the', 'current', '']:
+                                app_manager.switch_app(target)
+                                time.sleep(0.5)
+                            import win32gui
+                            hwnd = win32gui.GetForegroundWindow()
+                            success, msg = screenshot_manager.capture_window(hwnd)
+                        elif mode == 'region':
+                            tts_engine.speak("Select the region.")
+                            success, msg = screenshot_manager.capture_region()
+                        else:
+                            success, msg = screenshot_manager.capture_fullscreen()
                         reply = msg
                     
                     # Speak the reply

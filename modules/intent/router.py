@@ -24,12 +24,13 @@ class IntentRouter:
         9. system.startup (params: action="list"|"enable"|"disable", app_name=string)
         10. web.search (params: query)
         11. conversational.chat
-        12. window.position (params: layout="left"|"right"|"center"|"maximize"|"minimize")
+        12. window.position (params: layout="left"|"right"|"center"|"maximize"|"minimize", target_window=string)
         13. window.monitor (params: monitor_index=int)
         14. desktop.switch (params: target=int|"next"|"previous")
         15. desktop.create
-        16. clarification_needed
-        17. unknown (use if you cannot confidently determine the intent)
+        16. screenshot.capture (params: mode="fullscreen"|"window"|"region", target_window="app_name if applicable")
+        17. clarification_needed
+        18. unknown (use if you cannot confidently determine the intent)
         """
         
         self.system_prompt = f"""
@@ -73,9 +74,19 @@ class IntentRouter:
         if re.search(r'\b(lock screen|lock computer|lock the pc|lock my pc)\b', t):
             return {"intent": "system.lock", "parameters": {}, "confidence": 1.0, "conversational_reply": "Locking the screen, boss."}
             
-        # Screenshot
-        if re.search(r'\b(take a screenshot|screenshot)\b', t):
-            return {"intent": "system.screenshot", "parameters": {}, "confidence": 1.0, "conversational_reply": "Snap!"}
+        # Screenshot (Phase 7)
+        match = re.search(r'(take a )?screenshot of (the )?(.*) window', t)
+        if match:
+            target = match.group(3).strip()
+            return {"intent": "screenshot.capture", "parameters": {"mode": "window", "target_window": target}, "confidence": 0.9}
+            
+        if "screenshot" in t:
+            if "region" in t or "area" in t or "select" in t:
+                return {"intent": "screenshot.capture", "parameters": {"mode": "region"}, "confidence": 0.9, "conversational_reply": "Select the region to capture."}
+            elif "window" in t or "app" in t:
+                return {"intent": "screenshot.capture", "parameters": {"mode": "window", "target_window": "current"}, "confidence": 0.9}
+            else:
+                return {"intent": "screenshot.capture", "parameters": {"mode": "fullscreen"}, "confidence": 0.9}
             
         # Open App (catch all)
         match = re.search(r'^open (.*?)[.!?]*$', t)

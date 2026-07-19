@@ -2,5 +2,9 @@
     "windowsterminal": {
         "right": 2,
         "left": 1
+    },
+    "notepad": {
+        "left": 1,
+        "right": 1
     }
 }
