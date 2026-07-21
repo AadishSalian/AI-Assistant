@@ -16,32 +16,8 @@ from modules.system.window_manager import WindowManager
 from modules.system.screenshot_manager import ScreenshotManager
 from modules.system.file_manager import FileManager
 
-def assistant_loop(config, logger, api):
-    logger.info("Initializing Sweetie Assistant Models...")
-    
-    tts_config = config.get('tts', {})
-    tts_engine = TTSEngine(
-        voice_name=tts_config.get('voice', 'en_US-lessac-low'),
-        speed=tts_config.get('speed', 1.0),
-        sentence_silence=tts_config.get('sentence_silence', 0.2)
-    )
-    
-    stt_config = config.get('stt', {})
-    stt_engine = STTEngine(
-        model_size=stt_config.get('model_size', 'small'),
-        compute_type=stt_config.get('compute_type', 'int8')
-    )
-    
-    wakeword_engine = WakeWordEngine(
-        model_path_or_name=config['wake_word']['phrase'], 
-        threshold=config['wake_word']['threshold']
-    )
-    
-    ollama_config = config.get('ollama', {})
-    intent_router = IntentRouter(
-        ollama_host=ollama_config.get('host', 'http://localhost:11434'),
-        model=ollama_config.get('model', 'llama3.2:3b')
-    )
+def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine, intent_router):
+    logger.info("Starting Sweetie Assistant Loop...")
     
     memory = MemoryBuffer()
     app_manager = AppManager(config)
@@ -70,9 +46,10 @@ def assistant_loop(config, logger, api):
                 else:
                     api.push_transcript("Listening for confirmation...")
                 
+                stt_settings = config.get('stt', {})
                 text = stt_engine.listen_and_transcribe(
-                    timeout=stt_config.get('listen_timeout', 6),
-                    phrase_time_limit=stt_config.get('phrase_limit', 15)
+                    timeout=stt_settings.get('listen_timeout', 6),
+                    phrase_time_limit=stt_settings.get('phrase_limit', 15)
                 )
                 
                 if text:
@@ -209,30 +186,14 @@ def assistant_loop(config, logger, api):
                         else:
                             reply = "I couldn't find any matching files."
                     elif intent_name == 'file.open_folder':
-                        # Resolve folder path roughly (e.g., 'downloads' to actual path)
-                        import os
                         folder_name = params.get('folder_name', '').lower()
-                        target = None
-                        for d in file_manager.search_dirs:
-                            if folder_name in d.lower():
-                                target = d
-                                break
-                        if not target:
-                            # Try expanding standard Windows paths
-                            target = os.path.join(os.path.expanduser("~"), folder_name.capitalize())
+                        target = file_manager.find_folder(folder_name)
                         
                         success, msg = file_manager.open_folder(target)
                         reply = msg
                     elif intent_name == 'file.organize':
                         folder_name = params.get('folder_name', '').lower()
-                        target = None
-                        import os
-                        for d in file_manager.search_dirs:
-                            if folder_name in d.lower():
-                                target = d
-                                break
-                        if not target:
-                            target = os.path.join(os.path.expanduser("~"), folder_name.capitalize())
+                        target = file_manager.find_folder(folder_name)
                             
                         if file_manager.auto_organize_confirm:
                             success, msg = file_manager.organize_folder(target, execute=False)
@@ -250,16 +211,19 @@ def assistant_loop(config, logger, api):
                             reply = msg
                     elif intent_name == 'file.bulk_operation':
                         action = params.get('action', 'move')
-                        src = params.get('source_folder', '')
-                        dest = params.get('destination_folder', '')
+                        src = params.get('source_folder', '').lower()
+                        dest = params.get('destination_folder', '').lower()
                         ext = params.get('extension', '')
                         
-                        import os
-                        # Simple resolution for source
-                        if not os.path.isabs(src):
-                            src = os.path.join(os.path.expanduser("~"), src.capitalize())
-                        if dest and not os.path.isabs(dest):
-                            dest = os.path.join(os.path.expanduser("~"), dest.capitalize())
+                        if not src:
+                            reply = "I need to know which folder to operate on."
+                            api.push_transcript(reply)
+                            tts_engine.speak(reply)
+                            continue
+                            
+                        src = file_manager.find_folder(src)
+                        if dest:
+                            dest = file_manager.find_folder(dest)
                             
                         if file_manager.auto_organize_confirm:
                             success, msg = file_manager.bulk_operation(action, src, ext, dest, execute=False)
@@ -301,8 +265,43 @@ def main():
     
     api = Api()
     
+    # Initialize all C-extension models on the Main Thread sequentially.
+    # This prevents fatal COM/OpenMP threading deadlocks with PyWebView/WinForms.
+    print("\n[Sweetie] Initializing AI Models (This takes about 25 seconds)...")
+    logger.info("Initializing TTSEngine on Main Thread...")
+    tts_config = config.get('tts', {})
+    tts_engine = TTSEngine(
+        voice_name=tts_config.get('voice', 'en_US-lessac-low'),
+        speed=tts_config.get('speed', 1.0),
+        sentence_silence=tts_config.get('sentence_silence', 0.2)
+    )
+    
+    logger.info("Initializing STTEngine on Main Thread...")
+    stt_config = config.get('stt', {})
+    stt_engine = STTEngine(
+        model_size=stt_config.get('model_size', 'small'),
+        compute_type=stt_config.get('compute_type', 'int8')
+    )
+    
+    logger.info("Initializing WakeWordEngine on Main Thread...")
+    wakeword_engine = WakeWordEngine(
+        model_path_or_name=config['wake_word']['phrase'], 
+        threshold=config['wake_word']['threshold']
+    )
+    
+    ollama_config = config.get('ollama', {})
+    intent_router = IntentRouter(
+        ollama_host=ollama_config.get('host', 'http://localhost:11434'),
+        model=ollama_config.get('model', 'llama3.2:3b')
+    )
+    print("[Sweetie] Models loaded! Starting GUI...")
+    
     # Run the assistant core in a background thread
-    assistant_thread = threading.Thread(target=assistant_loop, args=(config, logger, api), daemon=True)
+    assistant_thread = threading.Thread(
+        target=assistant_loop, 
+        args=(config, logger, api, tts_engine, stt_engine, wakeword_engine, intent_router), 
+        daemon=True
+    )
     assistant_thread.start()
     
     # Start stats polling thread for the dashboard

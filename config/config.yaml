@@ -54,4 +54,6 @@ files:
     - "C:\\Users\\aadis\\Documents"
     - "C:\\Users\\aadis\\Downloads"
     - "C:\\Users\\aadis\\Desktop"
+    - "C:\\Users\\aadis\\OneDrive\\Documents"
+    - "C:\\Users\\aadis\\OneDrive\\Desktop"
   auto_organize_confirm: true

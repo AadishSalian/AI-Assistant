@@ -17,6 +17,22 @@ class AppManager:
 
     def resolve_app_name(self, app_name):
         app_name = app_name.lower().strip()
+        # Special Windows Shell Aliases
+        shell_aliases = {
+            "recycle bin": "shell:RecycleBinFolder",
+            "recycling bin": "shell:RecycleBinFolder",
+            "control panel": "control",
+            "settings": "ms-settings:",
+            "this pc": "shell:MyComputerFolder",
+            "my computer": "shell:MyComputerFolder",
+            "downloads": "shell:Downloads",
+            "documents": "shell:Personal",
+            "pictures": "shell:My Pictures",
+            "desktop": "shell:Desktop"
+        }
+        if app_name in shell_aliases:
+            return app_name, shell_aliases[app_name]
+            
         # Direct hit in config
         if app_name in self.apps_config:
             return app_name, self.apps_config[app_name]

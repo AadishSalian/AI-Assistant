@@ -32,6 +32,28 @@ class FileManager:
             logger.error(f"Failed to open folder: {e}")
             return False, "Failed to open the folder."
 
+    def find_folder(self, folder_name):
+        """Finds a folder by name within the configured search directories."""
+        folder_name = folder_name.lower()
+        
+        # 1. Check if it perfectly matches a root search dir
+        for d in self.search_dirs:
+            if folder_name in d.lower() or folder_name in os.path.basename(d).lower():
+                return d
+                
+        # 2. Search recursively inside search dirs
+        for search_dir in self.search_dirs:
+            if not os.path.exists(search_dir):
+                continue
+            for root, dirs, files in os.walk(search_dir):
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                for d in dirs:
+                    if folder_name == d.lower() or folder_name in d.lower():
+                        return os.path.join(root, d)
+                        
+        # 3. Fallback to user home directory expansion
+        return os.path.join(os.path.expanduser("~"), folder_name.capitalize())
+
     def search_files(self, query=None, extension=None, days_ago=None):
         """Searches for files matching criteria across configured directories."""
         results = []

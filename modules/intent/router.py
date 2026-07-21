@@ -94,17 +94,17 @@ class IntentRouter:
                 return {"intent": "screenshot.capture", "parameters": {"mode": "fullscreen"}, "confidence": 0.9}
             
         # File Management (Phase 8)
-        if re.search(r'\b(clean up|organize) my (.*?) folder\b', t):
-            match = re.search(r'\b(clean up|organize) my (.*?) folder\b', t)
-            return {"intent": "file.organize", "parameters": {"folder_name": match.group(2).strip()}, "confidence": 0.9, "conversational_reply": "Let me check that folder."}
+        if re.search(r'\b(?:clean up|organize) (?:my |the )?(.*?) folder\b', t):
+            match = re.search(r'\b(?:clean up|organize) (?:my |the )?(.*?) folder\b', t)
+            return {"intent": "file.organize", "parameters": {"folder_name": match.group(1).strip()}, "confidence": 0.9, "conversational_reply": "Let me check that folder."}
             
-        if re.search(r'\b(open my|open the) (.*?) folder\b', t):
-            match = re.search(r'\b(open my|open the) (.*?) folder\b', t)
-            return {"intent": "file.open_folder", "parameters": {"folder_name": match.group(2).strip()}, "confidence": 0.9}
+        if re.search(r'\bopen (?:my |the )?(.*?) folder\b', t):
+            match = re.search(r'\bopen (?:my |the )?(.*?) folder\b', t)
+            return {"intent": "file.open_folder", "parameters": {"folder_name": match.group(1).strip()}, "confidence": 0.9}
             
-        if re.search(r'\b(find|search for) my (.*)\b', t):
-            match = re.search(r'\b(find|search for) my (.*)\b', t)
-            return {"intent": "file.search", "parameters": {"query": match.group(2).strip()}, "confidence": 0.9, "conversational_reply": "Searching..."}
+        if re.search(r'\b(?:find|search for) (?:my |the )?(.*)\b', t):
+            match = re.search(r'\b(?:find|search for) (?:my |the )?(.*)\b', t)
+            return {"intent": "file.search", "parameters": {"query": match.group(1).strip()}, "confidence": 0.9, "conversational_reply": "Searching..."}
 
         if "create a new desktop" in t or "new virtual desktop" in t:
             return {"intent": "desktop.create", "parameters": {}, "confidence": 0.9}
