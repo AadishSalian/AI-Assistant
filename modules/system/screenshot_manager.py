@@ -4,7 +4,6 @@ import subprocess
 import logging
 from io import BytesIO
 from PIL import Image
-import win32gui
 
 logger = logging.getLogger("sweetie.screenshot_manager")
 
@@ -66,6 +65,7 @@ class ScreenshotManager:
     def capture_window(self, hwnd):
         """Captures a specific window by its handle."""
         import mss
+        import win32gui
         if not hwnd:
             return False, "No active window found to capture."
             

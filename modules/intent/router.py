@@ -29,8 +29,13 @@ class IntentRouter:
         14. desktop.switch (params: target=int|"next"|"previous")
         15. desktop.create
         16. screenshot.capture (params: mode="fullscreen"|"window"|"region", target_window="app_name if applicable")
-        17. clarification_needed
-        18. unknown (use if you cannot confidently determine the intent)
+        17. file.search (params: query=string, extension=string, days_ago=int)
+        18. file.open_folder (params: folder_name=string)
+        19. file.organize (params: folder_name=string)
+        20. file.bulk_operation (params: action="move"|"delete", source_folder=string, destination_folder=string, extension=string)
+        21. desktop.close
+        22. clarification_needed
+        23. unknown (use if you cannot confidently determine the intent)
         """
         
         self.system_prompt = f"""
@@ -88,6 +93,25 @@ class IntentRouter:
             else:
                 return {"intent": "screenshot.capture", "parameters": {"mode": "fullscreen"}, "confidence": 0.9}
             
+        # File Management (Phase 8)
+        if re.search(r'\b(clean up|organize) my (.*?) folder\b', t):
+            match = re.search(r'\b(clean up|organize) my (.*?) folder\b', t)
+            return {"intent": "file.organize", "parameters": {"folder_name": match.group(2).strip()}, "confidence": 0.9, "conversational_reply": "Let me check that folder."}
+            
+        if re.search(r'\b(open my|open the) (.*?) folder\b', t):
+            match = re.search(r'\b(open my|open the) (.*?) folder\b', t)
+            return {"intent": "file.open_folder", "parameters": {"folder_name": match.group(2).strip()}, "confidence": 0.9}
+            
+        if re.search(r'\b(find|search for) my (.*)\b', t):
+            match = re.search(r'\b(find|search for) my (.*)\b', t)
+            return {"intent": "file.search", "parameters": {"query": match.group(2).strip()}, "confidence": 0.9, "conversational_reply": "Searching..."}
+
+        if "create a new desktop" in t or "new virtual desktop" in t:
+            return {"intent": "desktop.create", "parameters": {}, "confidence": 0.9}
+            
+        if "close the desktop" in t or "close this desktop" in t or "close virtual desktop" in t:
+            return {"intent": "desktop.close", "parameters": {}, "confidence": 0.9, "conversational_reply": "Closing desktop."}
+
         # Open App (catch all)
         match = re.search(r'^open (.*?)[.!?]*$', t)
         if match:
@@ -144,9 +168,6 @@ class IntentRouter:
         match = re.search(r'switch to desktop (\d+)', t)
         if match:
             return {"intent": "desktop.switch", "parameters": {"target": int(match.group(1))}, "confidence": 0.9}
-            
-        if "create a new desktop" in t or "new virtual desktop" in t:
-            return {"intent": "desktop.create", "parameters": {}, "confidence": 0.9}
             
         return None
 

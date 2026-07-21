@@ -8,6 +8,7 @@ logger = logging.getLogger("sweetie.gui")
 class Api:
     def __init__(self):
         self.window = None
+        self.is_ready = False
 
     def set_window(self, window):
         self.window = window
@@ -27,36 +28,33 @@ class Api:
     # --- Methods to push to UI ---
     
     def push_state(self, state_name, message=""):
-        if self.window:
+        if self.window and self.is_ready:
             try:
                 self.window.evaluate_js(f"setState('{state_name}', '{message}')")
             except Exception: pass
             
     def push_transcript(self, text):
-        if self.window:
+        if self.window and self.is_ready:
             safe_text = text.replace('\\', '\\\\').replace("'", "\\'")
             try:
                 self.window.evaluate_js(f"updateTranscript('{safe_text}')")
             except Exception: pass
             
     def push_log(self, text):
-        if self.window:
+        if self.window and self.is_ready:
             safe_text = text.replace('\\', '\\\\').replace("'", "\\'")
             try:
                 self.window.evaluate_js(f"addLogEntry('{safe_text}')")
             except Exception: pass
 
 def start_stats_loop(api):
-    # Wait briefly before pushing stats so window is likely ready
-    time.sleep(3)
-    
     while True:
         try:
             cpu = psutil.cpu_percent(interval=1)
             mem = psutil.virtual_memory().percent
             disk = psutil.disk_usage('/').percent
             
-            if api.window:
+            if api.window and api.is_ready:
                 api.window.evaluate_js(f"updateStats({cpu}, {mem}, {disk})")
         except Exception:
             pass

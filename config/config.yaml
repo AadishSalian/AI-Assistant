@@ -48,3 +48,10 @@ safety:
 screenshot:
   save_directory: "screenshots" # Will be resolved relative to sweetie dir if not absolute
   format: "png" # Options: png, jpeg, bmp
+
+files:
+  search_directories:
+    - "C:\\Users\\aadis\\Documents"
+    - "C:\\Users\\aadis\\Downloads"
+    - "C:\\Users\\aadis\\Desktop"
+  auto_organize_confirm: true

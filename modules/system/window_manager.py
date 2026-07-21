@@ -236,17 +236,26 @@ class WindowManager:
             return False, "Failed to switch virtual desktops."
 
     def create_desktop(self):
+        """Creates a new virtual desktop and switches to it."""
+        from pyvda import VirtualDesktop
         try:
-            from pyvda import VirtualDesktop
-        except ImportError:
-            return False, "Virtual desktop library (pyvda) is not installed."
-        try:
-            new_vd = VirtualDesktop.create()
-            new_vd.go()
-            return True, f"Created and switched to a new virtual desktop."
+            new_desktop = VirtualDesktop.create()
+            new_desktop.go()
+            return True, "Created and switched to a new virtual desktop."
         except Exception as e:
-            logger.error(f"pyvda error: {e}")
+            logger.error(f"Failed to create virtual desktop: {e}")
             return False, "Failed to create a virtual desktop."
+            
+    def close_desktop(self):
+        """Closes the current virtual desktop."""
+        from pyvda import VirtualDesktop
+        try:
+            current = VirtualDesktop.current()
+            current.remove()
+            return True, "Closed the virtual desktop."
+        except Exception as e:
+            logger.error(f"Failed to close virtual desktop: {e}")
+            return False, "Failed to close the virtual desktop."
 
     def record_layout(self, app_name, layout):
         """Records that the user used 'layout' for 'app_name'."""

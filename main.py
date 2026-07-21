@@ -14,6 +14,7 @@ from core.memory import MemoryBuffer
 from modules.system.app_manager import AppManager
 from modules.system.window_manager import WindowManager
 from modules.system.screenshot_manager import ScreenshotManager
+from modules.system.file_manager import FileManager
 
 def assistant_loop(config, logger, api):
     logger.info("Initializing Sweetie Assistant Models...")
@@ -46,14 +47,11 @@ def assistant_loop(config, logger, api):
     app_manager = AppManager(config)
     window_manager = WindowManager(config)
     screenshot_manager = ScreenshotManager(config)
+    file_manager = FileManager(config)
     
     user_name = config['assistant']['user_name']
     require_confirm = config.get('safety', {}).get('require_confirm', True)
     pending_action = None
-    
-    # Wait for the UI to fully render before pushing JavaScript events
-    import time
-    time.sleep(3)
     
     api.push_log("System initialized and ready.")
     
@@ -180,6 +178,9 @@ def assistant_loop(config, logger, api):
                     elif intent_name == 'desktop.create':
                         success, msg = window_manager.create_desktop()
                         reply = msg
+                    elif intent_name == 'desktop.close':
+                        success, msg = window_manager.close_desktop()
+                        reply = msg
                     elif intent_name == 'screenshot.capture':
                         mode = params.get('mode', 'fullscreen')
                         target = params.get('target_window', 'current')
@@ -197,6 +198,83 @@ def assistant_loop(config, logger, api):
                         else:
                             success, msg = screenshot_manager.capture_fullscreen()
                         reply = msg
+                    elif intent_name == 'file.search':
+                        query = params.get('query')
+                        ext = params.get('extension')
+                        days = params.get('days_ago')
+                        results = file_manager.search_files(query, ext, days)
+                        if results:
+                            reply = f"I found {len(results)} matching files."
+                            api.push_log(f"Search results: {results[:5]}")
+                        else:
+                            reply = "I couldn't find any matching files."
+                    elif intent_name == 'file.open_folder':
+                        # Resolve folder path roughly (e.g., 'downloads' to actual path)
+                        import os
+                        folder_name = params.get('folder_name', '').lower()
+                        target = None
+                        for d in file_manager.search_dirs:
+                            if folder_name in d.lower():
+                                target = d
+                                break
+                        if not target:
+                            # Try expanding standard Windows paths
+                            target = os.path.join(os.path.expanduser("~"), folder_name.capitalize())
+                        
+                        success, msg = file_manager.open_folder(target)
+                        reply = msg
+                    elif intent_name == 'file.organize':
+                        folder_name = params.get('folder_name', '').lower()
+                        target = None
+                        import os
+                        for d in file_manager.search_dirs:
+                            if folder_name in d.lower():
+                                target = d
+                                break
+                        if not target:
+                            target = os.path.join(os.path.expanduser("~"), folder_name.capitalize())
+                            
+                        if file_manager.auto_organize_confirm:
+                            success, msg = file_manager.organize_folder(target, execute=False)
+                            if not success or "Nothing to organize" in msg:
+                                reply = msg
+                            else:
+                                needs_confirm = True
+                                reply = msg
+                                def execute_org(t=target):
+                                    success, emsg = file_manager.organize_folder(t, execute=True)
+                                    tts_engine.speak(emsg)
+                                pending_action = execute_org
+                        else:
+                            success, msg = file_manager.organize_folder(target, execute=True)
+                            reply = msg
+                    elif intent_name == 'file.bulk_operation':
+                        action = params.get('action', 'move')
+                        src = params.get('source_folder', '')
+                        dest = params.get('destination_folder', '')
+                        ext = params.get('extension', '')
+                        
+                        import os
+                        # Simple resolution for source
+                        if not os.path.isabs(src):
+                            src = os.path.join(os.path.expanduser("~"), src.capitalize())
+                        if dest and not os.path.isabs(dest):
+                            dest = os.path.join(os.path.expanduser("~"), dest.capitalize())
+                            
+                        if file_manager.auto_organize_confirm:
+                            success, msg = file_manager.bulk_operation(action, src, ext, dest, execute=False)
+                            if not success or "No files found" in msg:
+                                reply = msg
+                            else:
+                                needs_confirm = True
+                                reply = msg
+                                def execute_bulk(a=action, s=src, e=ext, d=dest):
+                                    success, emsg = file_manager.bulk_operation(a, s, e, d, execute=True)
+                                    tts_engine.speak(emsg)
+                                pending_action = execute_bulk
+                        else:
+                            success, msg = file_manager.bulk_operation(action, src, ext, dest, execute=True)
+                            reply = msg
                     
                     # Speak the reply
                     api.push_transcript(reply)
@@ -250,6 +328,12 @@ def main():
     )
     
     api.set_window(window)
+    
+    def on_loaded():
+        api.is_ready = True
+        logger.info("GUI loaded and ready.")
+        
+    window.events.loaded += on_loaded
     
     # Start the GUI event loop on the main thread (blocks until window is closed)
     webview.start()
