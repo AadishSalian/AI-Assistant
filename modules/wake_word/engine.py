@@ -30,7 +30,7 @@ class WakeWordEngine:
         self.audio = pyaudio.PyAudio()
         logger.info("Wake word engine initialized successfully.")
 
-    def listen_for_wake_word(self):
+    def listen_for_wake_word(self, event_queue=None):
         logger.info("Listening for wake word...")
         mic_stream = self.audio.open(format=self.FORMAT, 
                                      channels=self.CHANNELS,
@@ -39,6 +39,10 @@ class WakeWordEngine:
                                      frames_per_buffer=self.CHUNK)
         try:
             while True:
+                # Check for background events (like scheduled reminders)
+                if event_queue and not event_queue.empty():
+                    return "event"
+                    
                 # Read audio data from mic
                 audio_data = np.frombuffer(mic_stream.read(self.CHUNK, exception_on_overflow=False), dtype=np.int16)
                 

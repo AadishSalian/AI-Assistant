@@ -13,17 +13,23 @@ from modules.intent.router import IntentRouter
 from core.memory import MemoryBuffer
 from modules.system.app_manager import AppManager
 from modules.system.window_manager import WindowManager
+import queue
 from modules.system.screenshot_manager import ScreenshotManager
 from modules.system.file_manager import FileManager
+from modules.system.system_manager import SystemManager
+from modules.system.scheduler_manager import SchedulerManager
 
 def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine, intent_router):
     logger.info("Starting Sweetie Assistant Loop...")
     
+    event_queue = queue.Queue()
     memory = MemoryBuffer()
     app_manager = AppManager(config)
     window_manager = WindowManager(config)
     screenshot_manager = ScreenshotManager(config)
     file_manager = FileManager(config)
+    system_manager = SystemManager()
+    scheduler_manager = SchedulerManager(api, event_queue)
     
     user_name = config['assistant']['user_name']
     require_confirm = config.get('safety', {}).get('require_confirm', True)
@@ -34,7 +40,23 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
     try:
         while True:
             api.push_state('idle')
-            if wakeword_engine.listen_for_wake_word():
+            wake_word_heard = False
+            
+            # If we need confirmation, we skip wakeword listening and wait directly
+            if pending_action:
+                wake_word_heard = True
+                api.push_log("Awaiting user confirmation...")
+            else:
+                wake_word_heard = wakeword_engine.listen_for_wake_word(event_queue=event_queue)
+                
+            if wake_word_heard == "event":
+                event = event_queue.get()
+                if event["type"] == "reminder":
+                    api.push_transcript(event["message"])
+                    tts_engine.speak(event["message"])
+                continue
+                
+            if wake_word_heard:
                 api.push_state('listening')
                 api.push_log("Wake word detected")
                 
@@ -209,6 +231,32 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
                         else:
                             success, msg = file_manager.organize_folder(target, execute=True)
                             reply = msg
+                    elif intent_name == 'system.volume':
+                        success, msg = system_manager.set_volume(params.get('level'), params.get('direction'))
+                        reply = msg
+                    elif intent_name == 'system.mute':
+                        success, msg = system_manager.set_mute(params.get('state'))
+                        reply = msg
+                    elif intent_name == 'system.brightness':
+                        success, msg = system_manager.set_brightness(params.get('level'), params.get('direction'))
+                        reply = msg
+                    elif intent_name == 'system.info':
+                        success, msg = system_manager.get_system_info()
+                        reply = msg
+                    elif intent_name == 'system.schedule':
+                        success, msg = scheduler_manager.add_reminder(params.get('task'), params.get('time'))
+                        reply = msg
+                    elif intent_name == 'system.power':
+                        # Power commands ALWAYS require confirmation regardless of settings
+                        needs_confirm = True
+                        reply = f"Are you sure you want to {params.get('action')}?"
+                        def execute_power(act=params.get('action')):
+                            success, pmsg = system_manager.power_action(act)
+                            tts_engine.speak(pmsg)
+                        pending_action = execute_power
+                    elif intent_name == 'system.cancel':
+                        # Just in case a shutdown is active, abort it
+                        system_manager.power_action("cancel")
                     elif intent_name == 'file.bulk_operation':
                         action = params.get('action', 'move')
                         src = params.get('source_folder', '').lower()

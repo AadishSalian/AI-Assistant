@@ -64,21 +64,52 @@ class IntentRouter:
         if t in ["no", "nope", "cancel", "stop"]:
             return {"intent": "system.cancel", "parameters": {}, "confidence": 1.0, "conversational_reply": "Cancelled."}
             
+        # Bare keywords
+        if t in ["volume", "sound", "brightness", "screen"]:
+            return {"intent": "clarification_needed", "parameters": {}, "confidence": 1.0, "conversational_reply": f"What would you like me to do with the {t}?"}
+            
         # Mute
         if re.search(r'\b(mute|unmute)\b', t):
             state = "on" if "mute" in t and "unmute" not in t else "off"
             return {"intent": "system.mute", "parameters": {"state": state}, "confidence": 1.0, "conversational_reply": "Got it."}
-            
         # Volume
-        if re.search(r'volume up|turn it up|louder', t):
-            return {"intent": "system.volume", "parameters": {"direction": "up"}, "confidence": 1.0, "conversational_reply": "Turning it up."}
-        if re.search(r'volume down|turn it down|quieter', t):
-            return {"intent": "system.volume", "parameters": {"direction": "down"}, "confidence": 1.0, "conversational_reply": "Turning it down."}
+        match = re.search(r'(?:set )?volume (?:to )?(\d+)', t)
+        if match:
+            return {"intent": "system.volume", "parameters": {"level": int(match.group(1))}, "confidence": 1.0}
+        if re.search(r'volume up|turn it up|louder|increase(?: the)? volume|raise(?: the)? volume', t):
+            return {"intent": "system.volume", "parameters": {"direction": "up"}, "confidence": 1.0}
+        if re.search(r'volume down|turn it down|quieter|decrease(?: the)? volume|lower(?: the)? volume', t):
+            return {"intent": "system.volume", "parameters": {"direction": "down"}, "confidence": 1.0}
             
-        # Lock
+        # Brightness
+        match = re.search(r'(?:set )?brightness (?:to )?(\d+)', t)
+        if match:
+            return {"intent": "system.brightness", "parameters": {"level": int(match.group(1))}, "confidence": 1.0}
+        if re.search(r'brightness up|brighter|screen brighter|increase(?: the)? brightness|raise(?: the)? brightness', t):
+            return {"intent": "system.brightness", "parameters": {"direction": "up"}, "confidence": 1.0}
+        if re.search(r'brightness down|dimmer|screen dimmer|decrease(?: the)? brightness|lower(?: the)? brightness', t):
+            return {"intent": "system.brightness", "parameters": {"direction": "down"}, "confidence": 1.0}
+            
+        # Power
         if re.search(r'\b(lock screen|lock computer|lock the pc|lock my pc)\b', t):
-            return {"intent": "system.lock", "parameters": {}, "confidence": 1.0, "conversational_reply": "Locking the screen, boss."}
+            return {"intent": "system.power", "parameters": {"action": "lock"}, "confidence": 1.0, "conversational_reply": "Are you sure you want to lock the screen?"}
+        if re.search(r'\b(sleep|go to sleep|put pc to sleep)\b', t):
+            return {"intent": "system.power", "parameters": {"action": "sleep"}, "confidence": 1.0, "conversational_reply": "Are you sure you want to go to sleep?"}
+        if re.search(r'\b(restart|reboot)\b', t):
+            return {"intent": "system.power", "parameters": {"action": "restart"}, "confidence": 1.0, "conversational_reply": "Are you sure you want to restart?"}
+        if re.search(r'\b(shut down|shutdown|turn off)\b', t):
+            return {"intent": "system.power", "parameters": {"action": "shutdown"}, "confidence": 1.0, "conversational_reply": "Are you sure you want to shut down?"}
             
+        # System Info
+        if re.search(r'\b(system status|how is my system|how\'s my system|system info)\b', t):
+            return {"intent": "system.info", "parameters": {}, "confidence": 1.0}
+            
+        # Schedule
+        match = re.search(r'\b(?:remind me|set a reminder) (?:to )?(.*?) (in|at|every) (.*)\b', t)
+        if match:
+            task = match.group(1).strip()
+            time_str = f"{match.group(2)} {match.group(3)}".strip()
+            return {"intent": "system.schedule", "parameters": {"task": task, "time": time_str}, "confidence": 0.9}
         # Screenshot (Phase 7)
         match = re.search(r'(take a )?screenshot of (the )?(.*) window', t)
         if match:
