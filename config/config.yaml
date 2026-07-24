@@ -3,6 +3,8 @@ assistant:
   user_name: "Aadish"
   log_level: "INFO"
   proactive_suggestions: false
+  conversation_window_seconds: 20
+  exit_phrases: ["that's all", "go to sleep", "thanks sweetie", "nevermind"]
 
 wake_word:
   # Using openWakeWord's built-in "hey_jarvis" as a placeholder for Phase 1.

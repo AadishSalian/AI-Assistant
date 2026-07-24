@@ -35,18 +35,24 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
     require_confirm = config.get('safety', {}).get('require_confirm', True)
     pending_action = None
     
+    conversation_active = False
+    conversation_timeout = config.get('assistant', {}).get('conversation_window_seconds', 20)
+    exit_phrases = config.get('assistant', {}).get('exit_phrases', ["that's all", "go to sleep", "thanks sweetie"])
+    
     api.push_log("System initialized and ready.")
     
     try:
         while True:
-            api.push_state('idle')
             wake_word_heard = False
             
             # If we need confirmation, we skip wakeword listening and wait directly
             if pending_action:
                 wake_word_heard = True
                 api.push_log("Awaiting user confirmation...")
+            elif conversation_active:
+                wake_word_heard = True
             else:
+                api.push_state('idle')
                 wake_word_heard = wakeword_engine.listen_for_wake_word(event_queue=event_queue)
                 
             if wake_word_heard == "event":
@@ -58,21 +64,45 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
                 
             if wake_word_heard:
                 api.push_state('listening')
-                api.push_log("Wake word detected")
                 
-                # Only greet if we don't have a pending action
-                if not pending_action:
+                # Handle mode transition logging and greeting
+                if not conversation_active and not pending_action:
+                    logger.info("Transition to conversation mode: Wake word detected.")
+                    conversation_active = True
+                    api.push_log("Wake word detected")
                     response_text = f"Hey {user_name}, welcome back boss"
                     api.push_transcript(response_text)
                     tts_engine.speak(response_text)
-                else:
+                elif pending_action:
                     api.push_transcript("Listening for confirmation...")
                 
                 stt_settings = config.get('stt', {})
+                timeout_val = conversation_timeout if conversation_active and not pending_action else stt_settings.get('listen_timeout', 6)
+                
                 text = stt_engine.listen_and_transcribe(
-                    timeout=stt_settings.get('listen_timeout', 6),
+                    timeout=timeout_val,
                     phrase_time_limit=stt_settings.get('phrase_limit', 15)
                 )
+                
+                if not text:
+                    # Silence timeout
+                    if conversation_active and not pending_action:
+                        logger.info("Transition to wake-word mode: Conversation window timed out.")
+                        conversation_active = False
+                    elif pending_action:
+                        logger.info("Confirmation timed out.")
+                        pending_action = None
+                    continue
+                    
+                # Exit phrase check
+                if conversation_active and not pending_action:
+                    import re
+                    clean_text = re.sub(r'[^\w\s]', '', text.lower().strip())
+                    if any(phrase in clean_text for phrase in exit_phrases):
+                        logger.info("Transition to wake-word mode: Exit phrase detected.")
+                        tts_engine.speak("Talk soon, bestie.")
+                        conversation_active = False
+                        continue
                 
                 if text:
                     api.push_transcript(text)
