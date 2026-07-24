@@ -5,14 +5,16 @@ import logging
 logger = logging.getLogger("sweetie.memory")
 
 class MemoryBuffer:
-    def __init__(self, filepath="logs/memory.json", max_exchanges=10):
+    def __init__(self, filepath="logs/memory.json", max_exchanges=50):
         self.filepath = filepath
         self.max_exchanges = max_exchanges
         self.history = []
+        self.session_start = len(self.history) # Track where the current session started
         
         # Ensure directory exists
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
         self.load()
+        self.session_start = len(self.history)
 
     def load(self):
         if os.path.exists(self.filepath):
@@ -42,6 +44,7 @@ class MemoryBuffer:
         # Keep only the last N exchanges
         if len(self.history) > self.max_exchanges:
             self.history = self.history[-self.max_exchanges:]
+            self.session_start = max(0, self.session_start - 1)
             
         self.save()
 
@@ -51,7 +54,13 @@ class MemoryBuffer:
             return "No previous conversation context."
             
         context = "Recent Conversation History:\n"
-        for i, ex in enumerate(self.history):
+        
+        # Determine how many exchanges to show to avoid blowing up the context window
+        # For a 3B model, we want to keep it reasonable. 
+        recent = self.history[-10:]
+        
+        for i, ex in enumerate(recent):
             context += f"User: {ex['user']}\n"
             context += f"Sweetie (Intent: {ex['intent']}): {ex['sweetie']}\n"
+            
         return context

@@ -2,6 +2,7 @@ assistant:
   name: "Sweetie"
   user_name: "Aadish"
   log_level: "INFO"
+  proactive_suggestions: false
 
 wake_word:
   # Using openWakeWord's built-in "hey_jarvis" as a placeholder for Phase 1.

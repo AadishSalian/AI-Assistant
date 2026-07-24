@@ -8,7 +8,8 @@ import re
 logger = logging.getLogger("sweetie.scheduler_manager")
 
 class SchedulerManager:
-    def __init__(self, api, event_queue):
+    def __init__(self, config, api, event_queue):
+        self.config = config
         self.api = api
         self.event_queue = event_queue
         self.scheduler = BackgroundScheduler()
@@ -18,8 +19,47 @@ class SchedulerManager:
         
         # Use SQLite for persistence
         self.scheduler.add_jobstore('sqlalchemy', url='sqlite:///data/jobs.sqlite')
+        
+        # Proactive Assistance Toggle
+        if self.config.get('assistant', {}).get('proactive_suggestions', False):
+            # Run the proactive check every hour
+            self.scheduler.add_job(self._proactive_check, 'interval', hours=1, id='proactive_check', replace_existing=True)
+            logger.info("Proactive suggestions enabled (checks every 1 hour).")
+            
         self.scheduler.start()
         logger.info("Task Scheduler started.")
+
+    def _proactive_check(self):
+        """Analyzes memory to find common patterns and suggests an action."""
+        import json
+        try:
+            with open("logs/memory.json", "r") as f:
+                history = json.load(f)
+        except Exception:
+            return
+            
+        if not history:
+            return
+            
+        # Very simple heuristic: find the most common intent in the last N exchanges
+        intents = {}
+        for ex in history[-20:]: # Look at recent history
+            i = ex.get('intent')
+            if i and i not in ['unknown', 'clarification_needed', 'conversational.chat']:
+                intents[i] = intents.get(i, 0) + 1
+                
+        if not intents:
+            return
+            
+        most_common = max(intents, key=intents.get)
+        if intents[most_common] >= 3: # If they did it at least 3 times recently
+            suggestion_text = f"Hey, you've been asking for {most_common} a lot. Want me to do that for you?"
+            
+            # Send to event queue so the main loop speaks it safely
+            self.event_queue.put({
+                'type': 'reminder',
+                'message': suggestion_text
+            })
 
     def add_reminder(self, task_description, time_string):
         """

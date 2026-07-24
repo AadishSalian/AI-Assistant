@@ -8,8 +8,27 @@ logger = logging.getLogger("sweetie.intent")
 
 class IntentRouter:
     def __init__(self, ollama_host="http://localhost:11434", model="phi3:mini"):
+        import os
         self.ollama_host = ollama_host
         self.model = model
+        
+        self.corrections_file = "data/corrections.json"
+        self.corrections = {}
+        if os.path.exists(self.corrections_file):
+            try:
+                with open(self.corrections_file, 'r') as f:
+                    self.corrections = json.load(f)
+            except Exception:
+                pass
+                
+        # Load personality
+        personality_text = "You are Sweetie, a witty, sophisticated, professional-but-personable AI assistant."
+        try:
+            with open("personality.md", "r") as f:
+                personality_text = f.read()
+        except Exception:
+            pass
+
         
         self.intent_schema = """
         AVAILABLE INTENTS:
@@ -39,10 +58,11 @@ class IntentRouter:
         """
         
         self.system_prompt = f"""
-        You are Sweetie, a witty, sophisticated, professional-but-personable AI assistant. 
-        You occasionally call the user "boss". Your responses must be concise.
+        {personality_text}
         
         Your job is to parse the user's input and return STRICT JSON.
+        
+        CRITICAL RULE: If the user is just making small talk, greeting you, saying goodbye, or saying something that doesn't clearly map to a specific system command, you MUST use the intent "conversational.chat". Do NOT hallucinate commands.
         
         {self.intent_schema}
         
@@ -55,9 +75,42 @@ class IntentRouter:
         }}
         """
 
-    def fast_path(self, text):
+    def detect_mood(self, text):
+        t = text.lower()
+        frustrated_keywords = ['now', 'hurry', 'urgent', 'fuck', 'shit', 'damn', 'why', 'stupid', 'slow']
+        if any(kw in t.split() for kw in frustrated_keywords) or '!' in text or text.isupper():
+            return "frustrated"
+        return "casual"
+        
+    def _save_corrections(self):
+        import os
+        os.makedirs(os.path.dirname(self.corrections_file), exist_ok=True)
+        with open(self.corrections_file, 'w') as f:
+            json.dump(self.corrections, f, indent=4)
+
+    def fast_path(self, text, memory=None):
         t = text.lower().strip()
         
+        # Check for corrections ("no I meant X")
+        correction_match = re.match(r'^(?:no\s*,?\s*i\s*meant|no\s*,?\s*open|actually\s*i\s*meant|wrong\s*,?\s*do)\s+(.*)', t)
+        if correction_match and memory and memory.history:
+            intended_action = correction_match.group(1).strip()
+            last_exchange = memory.history[-1]
+            last_user_text = last_exchange['user'].lower().strip()
+            
+            # Save the mapping: When I said <last_user_text>, I meant <intended_action>
+            self.corrections[last_user_text] = intended_action
+            self._save_corrections()
+            
+            # Now treat this turn as if the user just said the intended action
+            t = intended_action
+            text = intended_action
+            
+        # Apply any learned corrections
+        if t in self.corrections:
+            t = self.corrections[t]
+            text = t
+            
         # Confirm / Cancel
         if t in ["yes", "yep", "do it", "confirm", "sure"]:
             return {"intent": "system.confirm", "parameters": {}, "confidence": 1.0, "conversational_reply": "Done."}
@@ -202,13 +255,18 @@ class IntentRouter:
             
         return None
 
-    def smart_path(self, text, memory_context):
+    def smart_path(self, text, memory_context, mood):
+        # Inject mood modifier into system prompt
+        current_system_prompt = self.system_prompt
+        if mood == "frustrated":
+            current_system_prompt += "\n\nMOOD ALERT: The user is currently frustrated or rushed. Drop all teasing/sass. Be extremely fast, supportive, and concise. Do not joke."
+            
         prompt = f"{memory_context}\n\nUser Input: {text}\n\nRespond ONLY with valid JSON."
         
         payload = {
             "model": self.model,
             "prompt": prompt,
-            "system": self.system_prompt,
+            "system": current_system_prompt,
             "stream": False,
             "format": "json"
         }
@@ -229,18 +287,21 @@ class IntentRouter:
             
         return None
 
-    def route(self, text, memory_context=""):
+    def route(self, text, memory=None):
+        memory_context = memory.get_context_string() if memory else ""
+        mood = self.detect_mood(text)
+        
         # 1. Try Fast Path
         start_time = time.time()
-        fast_result = self.fast_path(text)
+        fast_result = self.fast_path(text, memory)
         if fast_result:
-            logger.info(f"Routed via FAST PATH in {(time.time() - start_time)*1000:.1f}ms")
+            logger.info(f"Routed via FAST PATH in {(time.time() - start_time)*1000:.1f}ms (Mood: {mood})")
             return fast_result
             
         # 2. Try Smart Path
-        logger.info("Falling back to SMART PATH (Ollama)...")
+        logger.info(f"Falling back to SMART PATH (Ollama)... (Mood: {mood})")
         start_time = time.time()
-        smart_result = self.smart_path(text, memory_context)
+        smart_result = self.smart_path(text, memory_context, mood)
         
         if smart_result:
             logger.info(f"Routed via SMART PATH in {time.time() - start_time:.2f}s")

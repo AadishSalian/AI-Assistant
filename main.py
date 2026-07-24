@@ -29,7 +29,7 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
     screenshot_manager = ScreenshotManager(config)
     file_manager = FileManager(config)
     system_manager = SystemManager()
-    scheduler_manager = SchedulerManager(api, event_queue)
+    scheduler_manager = SchedulerManager(config, api, event_queue)
     
     user_name = config['assistant']['user_name']
     require_confirm = config.get('safety', {}).get('require_confirm', True)
@@ -82,8 +82,7 @@ def assistant_loop(config, logger, api, tts_engine, stt_engine, wakeword_engine,
                     api.push_state('thinking')
                     
                     # Phase 4: Route Intent
-                    context = memory.get_context_string()
-                    result = intent_router.route(text, context)
+                    result = intent_router.route(text, memory=memory)
                     
                     intent_name = result.get('intent', 'unknown')
                     confidence = result.get('confidence', 0.0)
